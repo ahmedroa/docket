@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:docket/core/dates.dart';
 import 'package:docket/l10n/arabic.dart';
 import 'package:docket/l10n/l10n.dart';
+import 'package:docket/l10n/projects.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Every `tr('…')` literal in lib/, found by scanning the source.
@@ -40,6 +41,51 @@ void main() {
     final missing =
         usedKeys().where((k) => !arabicStrings.containsKey(k)).toList()..sort();
     expect(missing, isEmpty, reason: 'Add these to lib/l10n/arabic.dart');
+  });
+
+  test('"Projects" wording covers every string that says company', () {
+    String visible(String key) =>
+        key.replaceAll(RegExp(r'\{\w+\}'), '').split('|').last.toLowerCase();
+    final saysCompany = {
+      for (final e in arabicStrings.entries)
+        if (!e.key.startsWith('term|') &&
+            (visible(e.key).contains('compan') || e.value.contains('شرك')))
+          e.key,
+    };
+    expect(
+      saysCompany.difference(projectsEnglish.keys.toSet()),
+      isEmpty,
+      reason: 'Add to projectsEnglish in lib/l10n/projects.dart',
+    );
+    expect(projectsArabic.keys.toSet(), projectsEnglish.keys.toSet());
+    expect(
+      projectsEnglish.keys.where((k) => !arabicStrings.containsKey(k)),
+      isEmpty,
+      reason: 'keys must be real interface strings',
+    );
+    for (final map in [projectsEnglish, projectsArabic]) {
+      for (final e in map.entries) {
+        expect(placeholders(e.value), placeholders(e.key), reason: e.key);
+        expect(e.value.toLowerCase(), isNot(contains('compan')));
+        expect(e.value, isNot(contains('شرك')));
+      }
+    }
+  });
+
+  test('tr switches wording with L10n.projects', () {
+    addTearDown(() {
+      L10n.projects = false;
+      L10n.current = AppLanguage.ar;
+    });
+    L10n.projects = true;
+    L10n.current = AppLanguage.ar;
+    expect(tr('Companies'), 'المشاريع');
+    expect(tr('Add company'), 'إضافة مشروع');
+    L10n.current = AppLanguage.en;
+    expect(tr('Companies'), 'Projects');
+    expect(tr('{n} companies', {'n': 3}), '3 projects');
+    L10n.projects = false;
+    expect(tr('Companies'), 'Companies');
   });
 
   test('Arabic keeps the same {placeholders}', () {

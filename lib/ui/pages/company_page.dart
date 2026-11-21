@@ -160,8 +160,22 @@ class _CompanyPageState extends State<CompanyPage> {
                 startedOnly: _tab == TaskStatus.inProgress,
               )
             : const <Task>[];
+        // A click on a to-do's circle starts it; it moves up to this group
+        // instead of leaving the To Do tab.
+        final doing = _tab == TaskStatus.todo && !_selection.active
+            ? store.tasksForCompany(company.id, TaskStatus.inProgress, sort)
+            : const <Task>[];
+        final head = [
+          if (doing.isNotEmpty) ...[
+            SectionHeader(tr('In Progress'), count: doing.length),
+            for (final t in doing)
+              TaskRow(key: ValueKey(t.id), task: t, showAdded: true),
+            if (tasks.isNotEmpty)
+              SectionHeader(tr('To Do'), count: tasks.length),
+          ],
+        ];
         final tail = [
-          if (tasks.isEmpty && done.isNotEmpty) _allDone(),
+          if (tasks.isEmpty && doing.isEmpty && done.isNotEmpty) _allDone(),
           ...completedTail(
             done,
             row: (t) => TaskRow(key: ValueKey(t.id), task: t, showAdded: true),
@@ -170,12 +184,18 @@ class _CompanyPageState extends State<CompanyPage> {
         ];
 
         Widget list;
-        if (tasks.isEmpty && tail.isEmpty) {
+        if (tasks.isEmpty && head.isEmpty && tail.isEmpty) {
           list = _empty(company);
         } else if (reorderable && tasks.isNotEmpty) {
           list = ReorderableListView.builder(
             padding: const EdgeInsets.symmetric(vertical: 6),
             buildDefaultDragHandles: false,
+            header: head.isEmpty
+                ? null
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: head,
+                  ),
             footer: tail.isEmpty
                 ? null
                 : Column(
@@ -194,11 +214,15 @@ class _CompanyPageState extends State<CompanyPage> {
             itemBuilder: (context, i) => row(tasks[i], i),
           );
         } else {
+          final n = head.length + tasks.length;
           list = ListView.builder(
             padding: const EdgeInsets.symmetric(vertical: 6),
-            itemCount: tasks.length + tail.length,
-            itemBuilder: (context, i) =>
-                i < tasks.length ? row(tasks[i], i) : tail[i - tasks.length],
+            itemCount: n + tail.length,
+            itemBuilder: (context, i) => i < head.length
+                ? head[i]
+                : i < n
+                ? row(tasks[i - head.length], i - head.length)
+                : tail[i - n],
           );
         }
 

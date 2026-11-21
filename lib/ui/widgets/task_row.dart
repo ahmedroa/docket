@@ -10,7 +10,8 @@ import 'common.dart';
 import 'menus.dart';
 import '../../l10n/l10n.dart';
 
-/// Circle that shows and toggles status: empty (to do), half (in progress), check (done).
+/// A task's status circle. Each click moves it on one step:
+/// to do → in progress → done; clicking a done task reopens it.
 class StatusCircle extends StatelessWidget {
   const StatusCircle({
     super.key,
@@ -23,10 +24,45 @@ class StatusCircle extends StatelessWidget {
   final double size;
 
   @override
+  Widget build(BuildContext context) => StatusDot(
+    status: task.status,
+    urgent: task.isUrgent && task.isOpen,
+    completeTooltip: tr('Complete  ⌘↵'),
+    size: size,
+    onTap: onTap,
+  );
+}
+
+/// Empty (to do), half (in progress) or ticked (done). On hover it previews
+/// what a click does next. Shared by tasks and session items.
+class StatusDot extends StatelessWidget {
+  const StatusDot({
+    super.key,
+    required this.status,
+    required this.onTap,
+    this.urgent = false,
+    this.completeTooltip,
+    this.size = 18,
+  });
+  final TaskStatus status;
+  final VoidCallback? onTap;
+
+  /// Red ring for urgent open tasks.
+  final bool urgent;
+
+  /// Tooltip while in progress (defaults to "Complete").
+  final String? completeTooltip;
+  final double size;
+
+  @override
   Widget build(BuildContext context) {
     final p = context.palette;
     return Tooltip(
-      message: task.isDone ? tr('Reopen') : tr('Complete  ⌘↵'),
+      message: switch (status) {
+        TaskStatus.todo => tr('Start'),
+        TaskStatus.inProgress => completeTooltip ?? tr('Complete'),
+        TaskStatus.done => tr('Reopen'),
+      },
       child: Hoverable(
         onTap: onTap,
         builder: (context, hovered, pressed) => AnimatedScale(
@@ -40,58 +76,17 @@ class StatusCircle extends StatelessWidget {
               transitionBuilder: (child, anim) =>
                   ScaleTransition(scale: anim, child: child),
               child: CustomPaint(
-                key: ValueKey('${task.status}-$hovered'),
+                key: ValueKey('$status-$hovered'),
                 size: Size.square(size),
                 painter: _StatusPainter(
-                  status: task.status,
+                  status: status,
                   hovered: hovered,
-                  ring: task.isUrgent && task.isOpen
-                      ? p.urgent
-                      : p.textTertiary,
+                  ring: urgent ? p.urgent : p.textTertiary,
                   progress: p.progress,
                   done: p.success,
                   check: Colors.white,
                 ),
               ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// The same round tick for things that are only done or not (session items).
-class DoneCircle extends StatelessWidget {
-  const DoneCircle({
-    super.key,
-    required this.done,
-    required this.onTap,
-    this.size = 18,
-  });
-  final bool done;
-  final VoidCallback onTap;
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    return Tooltip(
-      message: done ? tr('Reopen') : tr('Done'),
-      child: Hoverable(
-        onTap: onTap,
-        builder: (context, hovered, pressed) => AnimatedScale(
-          duration: const Duration(milliseconds: 120),
-          scale: pressed ? 0.88 : 1,
-          child: CustomPaint(
-            size: Size.square(size),
-            painter: _StatusPainter(
-              status: done ? TaskStatus.done : TaskStatus.todo,
-              hovered: hovered,
-              ring: p.textTertiary,
-              progress: p.progress,
-              done: p.success,
-              check: Colors.white,
             ),
           ),
         ),
@@ -141,25 +136,35 @@ class _StatusPainter extends CustomPainter {
       );
     }
 
+    void drawHalf(double alpha) => canvas.drawArc(
+      Rect.fromCircle(center: c, radius: r - 2.6),
+      -math.pi / 2,
+      math.pi,
+      true,
+      Paint()..color = progress.withValues(alpha: alpha),
+    );
+
+    // Hovering previews the next step: to do → in progress → done.
     switch (status) {
       case TaskStatus.todo:
-        canvas.drawCircle(c, r, stroke..color = ring);
-        if (hovered) drawCheck(ring, 0.8);
+        if (hovered) {
+          canvas.drawCircle(c, r, stroke..color = progress);
+          drawHalf(0.4);
+        } else {
+          canvas.drawCircle(c, r, stroke..color = ring);
+        }
       case TaskStatus.inProgress:
-        canvas.drawCircle(c, r, stroke..color = progress);
-        canvas.drawArc(
-          Rect.fromCircle(center: c, radius: r - 2.6),
-          -math.pi / 2,
-          math.pi,
-          true,
-          Paint()..color = progress,
-        );
         if (hovered) {
           canvas.drawCircle(
             c,
-            r - 2.6,
-            Paint()..color = progress.withValues(alpha: 0.25),
+            r + 0.5,
+            Paint()..color = done.withValues(alpha: 0.18),
           );
+          canvas.drawCircle(c, r, stroke..color = done);
+          drawCheck(done, 1);
+        } else {
+          canvas.drawCircle(c, r, stroke..color = progress);
+          drawHalf(1);
         }
       case TaskStatus.done:
         canvas.drawCircle(
@@ -395,6 +400,10 @@ class TaskRow extends StatefulWidget {
   final void Function(Task task)? onRangeSelect;
   final bool showDescription;
 
+  /// Below this width the priority moves from beside the title to the
+  /// details line, so titles aren't cut short.
+  static const compactWidth = 300.0;
+
   @override
   State<TaskRow> createState() => _TaskRowState();
 }
@@ -524,134 +533,151 @@ class _TaskRowState extends State<TaskRow> {
             selected: widget.selected,
             onTap: () => widget.onSelect?.call(t),
           )
-        : StatusCircle(task: t, onTap: () => app.toggleDone(t));
+        : StatusCircle(task: t, onTap: () => app.advanceStatus(t));
 
     return Hoverable(
       onTap: _tap,
       onHover: _hover,
       onSecondaryTapDown: (d) => showTaskMenu(context, t, at: d.globalPosition),
       cursor: SystemMouseCursors.basic,
-      builder: (context, hovered, pressed) {
-        return AnimatedContainer(
-          duration: const Duration(milliseconds: 90),
-          margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-          decoration: BoxDecoration(
-            color: widget.selected
-                ? p.selected
-                : pressed
-                ? p.pressed
-                : hovered
-                ? p.hover
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Stack(
-            children: [
-              if (t.isUrgent && t.isOpen)
-                PositionedDirectional(
-                  start: 0,
-                  top: 9,
-                  bottom: 9,
-                  child: Container(
-                    width: 2.5,
-                    decoration: BoxDecoration(
-                      color: p.urgent,
-                      borderRadius: BorderRadius.circular(2),
+      builder: (context, hovered, pressed) => LayoutBuilder(
+        builder: (context, constraints) {
+          // Narrow cards (curtain columns) give the title the whole line and
+          // show the priority with the dates underneath.
+          final compact = constraints.maxWidth < TaskRow.compactWidth;
+          final priority = PriorityTag(
+            task: t,
+            showNormal: hovered && t.isOpen && !compact,
+            muted: t.isDone,
+          );
+          final details = [
+            if (compact && t.priority != Priority.normal) priority,
+            ...meta,
+          ];
+          return AnimatedContainer(
+            duration: const Duration(milliseconds: 90),
+            margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+            decoration: BoxDecoration(
+              color: widget.selected
+                  ? p.selected
+                  : pressed
+                  ? p.pressed
+                  : hovered
+                  ? p.hover
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Stack(
+              children: [
+                if (t.isUrgent && t.isOpen)
+                  PositionedDirectional(
+                    start: 0,
+                    top: 9,
+                    bottom: 9,
+                    child: Container(
+                      width: 2.5,
+                      decoration: BoxDecoration(
+                        color: p.urgent,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
                     ),
                   ),
-                ),
-              Padding(
-                padding: const EdgeInsetsDirectional.fromSTEB(8, 8, 6, 8),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    SizedBox(
-                      width: 12,
-                      height: 18,
-                      child:
-                          widget.reorderIndex != null &&
-                              hovered &&
-                              !widget.selectionMode
-                          ? ReorderableDragStartListener(
-                              index: widget.reorderIndex!,
-                              child: MouseRegion(
-                                cursor: SystemMouseCursors.grab,
-                                child: Icon(
-                                  Icons.drag_indicator_rounded,
-                                  size: 14,
-                                  color: p.textTertiary,
+                Padding(
+                  padding: const EdgeInsetsDirectional.fromSTEB(8, 8, 6, 8),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(
+                        width: 12,
+                        height: 18,
+                        child:
+                            widget.reorderIndex != null &&
+                                hovered &&
+                                !widget.selectionMode
+                            ? ReorderableDragStartListener(
+                                index: widget.reorderIndex!,
+                                child: MouseRegion(
+                                  cursor: SystemMouseCursors.grab,
+                                  child: Icon(
+                                    Icons.drag_indicator_rounded,
+                                    size: 14,
+                                    color: p.textTertiary,
+                                  ),
                                 ),
-                              ),
-                            )
-                          : null,
-                    ),
-                    const SizedBox(width: 2),
-                    Padding(
-                      padding: const EdgeInsets.only(top: 0.5),
-                      child: leading,
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: Padding(
-                                  padding: const EdgeInsets.only(top: 1),
-                                  child: AutoText(
-                                    t.title.isEmpty ? tr('Untitled') : t.title,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: Type.bodyStrong.copyWith(
-                                      color: t.isDone
-                                          ? p.textSecondary
-                                          : p.text,
-                                      decoration: t.isDone
-                                          ? TextDecoration.lineThrough
-                                          : null,
-                                      decorationColor: p.textTertiary,
+                              )
+                            : null,
+                      ),
+                      const SizedBox(width: 2),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 0.5),
+                        child: leading,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: Padding(
+                                    padding: const EdgeInsets.only(top: 1),
+                                    child: AutoText(
+                                      t.title.isEmpty
+                                          ? tr('Untitled')
+                                          : t.title,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: Type.bodyStrong.copyWith(
+                                        color: t.isDone
+                                            ? p.textSecondary
+                                            : p.text,
+                                        decoration: t.isDone
+                                            ? TextDecoration.lineThrough
+                                            : null,
+                                        decorationColor: p.textTertiary,
+                                      ),
                                     ),
                                   ),
                                 ),
-                              ),
-                              const SizedBox(width: 6),
-                              PriorityTag(
-                                task: t,
-                                showNormal: hovered && t.isOpen,
-                                muted: t.isDone,
-                              ),
-                              ...hoverActions,
-                            ],
-                          ),
-                          if (widget.showDescription &&
-                              t.description.trim().isNotEmpty) ...[
-                            const SizedBox(height: 2),
-                            AutoText(
-                              t.description.trim().replaceAll('\n', ' '),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Type.small.copyWith(
-                                color: p.textSecondary,
-                              ),
+                                const SizedBox(width: 6),
+                                if (!compact) priority,
+                                ...hoverActions,
+                              ],
                             ),
+                            if (widget.showDescription &&
+                                t.description.trim().isNotEmpty) ...[
+                              const SizedBox(height: 2),
+                              AutoText(
+                                t.description.trim().replaceAll('\n', ' '),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Type.small.copyWith(
+                                  color: p.textSecondary,
+                                ),
+                              ),
+                            ],
+                            if (details.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Wrap(
+                                spacing: 10,
+                                runSpacing: 3,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                children: details,
+                              ),
+                            ],
                           ],
-                          if (meta.isNotEmpty) ...[
-                            const SizedBox(height: 4),
-                            Wrap(spacing: 10, runSpacing: 3, children: meta),
-                          ],
-                        ],
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            ],
-          ),
-        );
-      },
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 }

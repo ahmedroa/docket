@@ -164,6 +164,14 @@ class AppController extends ChangeNotifier {
     reminders.sync();
   }
 
+  /// "Companies" or "Projects" throughout the interface.
+  void setUseProjects(bool projects) {
+    if (store.settings.useProjects == projects) return;
+    L10n.projects = projects;
+    store.updateSettings((s) => s.useProjects = projects);
+    store.localizeDefaultNames(L10n.current);
+  }
+
   void _applyNativeStrings() {
     native.setLocalizedStrings({
       'open': tr('Open Docket'),
@@ -369,7 +377,15 @@ class AppController extends ChangeNotifier {
     }
   }
 
-  /// The status circle: open → completed, completed → reopened.
+  /// The status circle, one step per click: to do → in progress → done;
+  /// a done task reopens.
+  void advanceStatus(Task t) => setStatus(t, switch (t.status) {
+    TaskStatus.todo => TaskStatus.inProgress,
+    TaskStatus.inProgress => TaskStatus.done,
+    TaskStatus.done => TaskStatus.todo,
+  });
+
+  /// ⌘↵ and the Complete menu item: straight to done, or reopen.
   void toggleDone(Task t) =>
       setStatus(t, t.isDone ? TaskStatus.todo : TaskStatus.done);
 

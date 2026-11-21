@@ -97,8 +97,13 @@ void main() {
     expect(task.tags, ['finance']);
     expect(find.text('Added to Personal'), findsOneWidget);
 
-    // Urgent tasks without a date show under Today; click its status circle.
+    // Urgent tasks without a date show under Today. The circle moves one
+    // step per click: first it starts the task, then it completes it.
     expect(find.text('Call the bank'), findsOneWidget);
+    await tester.tap(find.byType(StatusCircle).first);
+    await tester.pumpAndSettle();
+    expect(task.status, TaskStatus.inProgress);
+    expect(find.text('Moved to In Progress'), findsOneWidget);
     await tester.tap(find.byType(StatusCircle).first);
     await tester.pumpAndSettle();
     expect(task.status, TaskStatus.done);
@@ -111,7 +116,7 @@ void main() {
 
     await tester.tap(find.text('Undo'));
     await tester.pumpAndSettle();
-    expect(task.status, TaskStatus.todo);
+    expect(task.status, TaskStatus.inProgress, reason: 'undo goes one step');
     await finish(tester);
   });
 
@@ -168,9 +173,12 @@ void main() {
       reason: 'company page pre-selects its company',
     );
 
-    app.setStatus(t, TaskStatus.inProgress);
+    // Its circle starts it; it moves up to In Progress but stays on To Do.
+    await tester.tap(find.byType(StatusCircle).first);
     await tester.pumpAndSettle();
-    expect(find.text('Nothing to do here'), findsOneWidget);
+    expect(t.status, TaskStatus.inProgress);
+    expect(find.text('Ship release'), findsOneWidget);
+    expect(find.text('Nothing to do here'), findsNothing);
     await tester.tap(find.text('In Progress').first);
     await tester.pumpAndSettle();
     expect(find.text('Ship release'), findsOneWidget);
@@ -269,6 +277,9 @@ void main() {
     expect(t.priority, Priority.urgent);
     expect(find.text('عاجلة'), findsWidgets);
 
+    await tester.tap(find.byType(StatusCircle).first);
+    await tester.pumpAndSettle();
+    expect(find.text('نُقلت إلى قيد التنفيذ'), findsOneWidget);
     await tester.tap(find.byType(StatusCircle).first);
     await tester.pumpAndSettle();
     expect(find.text('اكتملت المهمة'), findsOneWidget);
@@ -381,13 +392,25 @@ void main() {
       store.addTask(store.draftTask(companyId: b)..title = 'Call supplier');
       await tester.pumpAndSettle();
 
-      await tester.tap(
-        find.descendant(
-          of: find.widgetWithText(TaskRow, 'Send invoice'),
-          matching: find.byType(StatusCircle),
-        ),
+      Future<void> clickCircle() async {
+        await tester.tap(
+          find.descendant(
+            of: find.widgetWithText(TaskRow, 'Send invoice'),
+            matching: find.byType(StatusCircle),
+          ),
+        );
+        await tester.pumpAndSettle();
+      }
+
+      // First click: in progress, at the top of the column.
+      await clickCircle();
+      expect(invoice.status, TaskStatus.inProgress);
+      expect(
+        tester.getTopLeft(find.text('Send invoice')).dy,
+        lessThan(tester.getTopLeft(find.text('Call supplier')).dy),
       );
-      await tester.pumpAndSettle();
+      // Second click: done.
+      await clickCircle();
       expect(invoice.status, TaskStatus.done);
 
       final title = find.text('Send invoice');
@@ -402,14 +425,8 @@ void main() {
         reason: 'completed tasks sit under the open ones',
       );
 
-      // Unticking puts it back with the open tasks.
-      await tester.tap(
-        find.descendant(
-          of: find.widgetWithText(TaskRow, 'Send invoice'),
-          matching: find.byType(StatusCircle),
-        ),
-      );
-      await tester.pumpAndSettle();
+      // A third click reopens it.
+      await clickCircle();
       expect(invoice.status, TaskStatus.todo);
       store.setStatus(invoice, TaskStatus.done);
 
@@ -452,15 +469,23 @@ void main() {
       final column = tester.getRect(find.text('Company A').last);
       expect(session.left, greaterThan(column.right));
 
-      await tester.tap(
-        find
-            .descendant(
-              of: find.byType(SessionList),
-              matching: find.byType(DoneCircle),
-            )
-            .first,
-      );
-      await tester.pumpAndSettle();
+      Future<void> clickFirstCircle() async {
+        await tester.tap(
+          find
+              .descendant(
+                of: find.byType(SessionList),
+                matching: find.byType(StatusDot),
+              )
+              .first,
+        );
+        await tester.pumpAndSettle();
+      }
+
+      // First click: working on it. Second: done.
+      await clickFirstCircle();
+      expect(store.sessionItems.first.status, TaskStatus.inProgress);
+      expect(find.text('0 of 2'), findsOneWidget);
+      await clickFirstCircle();
       final first = store.sessionItems.last;
       expect(first.title, 'Reply to client emails');
       expect(first.done, isTrue);

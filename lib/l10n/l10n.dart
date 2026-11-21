@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 
 import 'arabic.dart';
+import 'projects.dart';
 
 enum AppLanguage {
   ar('ar', 'العربية'),
@@ -24,6 +25,9 @@ enum AppLanguage {
 /// [arabicStrings]. Set from settings at launch and when the user switches.
 class L10n {
   static AppLanguage current = AppLanguage.ar;
+
+  /// Say "projects" wherever the interface would say "companies".
+  static bool projects = false;
   static bool get isArabic => current == AppLanguage.ar;
 }
 
@@ -40,14 +44,28 @@ String trIn(
   String key, [
   Map<String, Object?> args = const {},
 ]) {
-  var s = lang == AppLanguage.ar
-      ? (arabicStrings[key] ?? _english(key))
-      : _english(key);
+  final reworded = L10n.projects
+      ? (lang == AppLanguage.ar ? projectsArabic : projectsEnglish)[key]
+      : null;
+  var s =
+      reworded ??
+      (lang == AppLanguage.ar
+          ? (arabicStrings[key] ?? _english(key))
+          : _english(key));
   for (final e in args.entries) {
     s = s.replaceAll('{${e.key}}', '${e.value}');
   }
   return s;
 }
+
+/// Every spelling a default name can have (both languages, both wordings),
+/// so it can be recognised and renamed when either changes.
+Set<String> defaultNameVariants(String key) => {
+  key,
+  ?arabicStrings[key],
+  ?projectsEnglish[key],
+  ?projectsArabic[key],
+};
 
 String _english(String key) {
   final bar = key.indexOf('|');

@@ -152,6 +152,9 @@ enum GlassTone {
 /// User preferences, persisted as one JSON document in the settings table.
 class AppSettings {
   AppLanguage language = AppLanguage.ar;
+
+  /// Call the groups "projects" instead of "companies" everywhere.
+  bool useProjects = false;
   ThemeMode themeMode = ThemeMode.system;
   bool use24h = false;
   SortMode sortMode = SortMode.manual;
@@ -215,6 +218,7 @@ class AppSettings {
 
   Map<String, dynamic> toJson() => {
     'language': language.code,
+    'useProjects': useProjects,
     'themeMode': themeMode.name,
     'use24h': use24h,
     'sortMode': sortMode.key,
@@ -256,6 +260,7 @@ class AppSettings {
     }
 
     s.language = AppLanguage.parse(j['language']);
+    s.useProjects = read('useProjects', s.useProjects);
     s.themeMode = ThemeMode.values.firstWhere(
       (m) => m.name == j['themeMode'],
       orElse: () => ThemeMode.system,

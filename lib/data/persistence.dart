@@ -67,8 +67,10 @@ class SqlitePersistence implements Persistence {
   SqlitePersistence._(this._db);
 
   final Database _db;
+
   /// 1: companies, tasks, subtasks, updates, settings. 2: session_items.
-  static const schemaVersion = 2;
+  /// 3: session_items.started_at.
+  static const schemaVersion = 3;
 
   static Future<SqlitePersistence> open(String path) async {
     final db = await openDatabase(
@@ -85,7 +87,14 @@ class SqlitePersistence implements Persistence {
         await batch.commit(noResult: true);
       },
       onUpgrade: (db, from, to) async {
-        if (from < 2) await db.execute(_sessionItemsTable);
+        if (from < 2) {
+          // Created with every current column.
+          await db.execute(_sessionItemsTable);
+        } else if (from < 3) {
+          await db.execute(
+            'ALTER TABLE session_items ADD COLUMN started_at INTEGER',
+          );
+        }
       },
     );
     return SqlitePersistence._(db);
@@ -98,6 +107,7 @@ class SqlitePersistence implements Persistence {
       sort_order REAL NOT NULL,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL,
+      started_at INTEGER,
       done_at INTEGER,
       deleted_at INTEGER
     )''';
@@ -357,9 +367,7 @@ class MemoryPersistence implements Persistence {
       ..addEntries(snapshot.updates.map((u) => MapEntry(u.id, u.toMap())));
     sessionItems
       ..clear()
-      ..addEntries(
-        snapshot.sessionItems.map((i) => MapEntry(i.id, i.toMap())),
-      );
+      ..addEntries(snapshot.sessionItems.map((i) => MapEntry(i.id, i.toMap())));
   }
 
   @override

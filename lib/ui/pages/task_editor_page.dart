@@ -257,7 +257,7 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
                     child: StatusCircle(
                       task: t,
                       size: 19,
-                      onTap: () => _app.toggleDone(t),
+                      onTap: () => _app.advanceStatus(t),
                     ),
                   ),
                   const SizedBox(width: 10),

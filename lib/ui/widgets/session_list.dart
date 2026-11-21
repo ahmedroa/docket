@@ -416,15 +416,18 @@ class _SessionRowState extends State<_SessionRow> {
               ? p.field
               : hovered
               ? p.hover
+              // What you're on right now stands out.
+              : item.status == TaskStatus.inProgress
+              ? p.progress.withValues(alpha: 0.1)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            DoneCircle(
-              done: item.done,
-              onTap: () => context.store.toggleSessionItem(item),
+            StatusDot(
+              status: item.status,
+              onTap: () => context.store.advanceSessionItem(item),
             ),
             const SizedBox(width: 10),
             Expanded(

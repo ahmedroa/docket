@@ -283,6 +283,11 @@ class TaskStore extends ChangeNotifier {
 
   /// Untouched default names ("Company A" / "الشركة الأولى") follow the
   /// interface language; anything the user typed is left alone.
+  /// Off in demo mode, where the sample names stay as written.
+  bool localizeNames = true;
+
+  /// Default names ("Company A", "Personal"…) follow the language and the
+  /// companies/projects wording until the user renames them.
   void localizeDefaultNames(AppLanguage lang) {
     const defaults = [
       'Company A',
@@ -291,9 +296,10 @@ class TaskStore extends ChangeNotifier {
       'Personal',
       'New Company',
     ];
+    if (!localizeNames) return;
     for (final c in companies) {
       for (final en in defaults) {
-        if (c.name == en || c.name == trIn(AppLanguage.ar, en)) {
+        if (defaultNameVariants(en).contains(c.name)) {
           final target = trIn(lang, en);
           if (c.name != target) updateCompany(c, name: target);
           break;
@@ -705,11 +711,17 @@ class TaskStore extends ChangeNotifier {
   // What you plan to do in this sitting. Separate from company tasks: its own
   // table, no dates, no reminders, not counted anywhere else.
 
-  /// Open items in the order written, then the done ones, newest first.
+  /// What you're working on first, then the rest in the order written, then
+  /// the done ones, newest first.
   List<SessionItem> get sessionItems {
     final live = _session.values.where((i) => !i.isDeleted);
     final open = live.where((i) => !i.done).toList()
-      ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+      ..sort((a, b) {
+        final working = (b.startedAt != null ? 1 : 0).compareTo(
+          a.startedAt != null ? 1 : 0,
+        );
+        return working != 0 ? working : a.sortOrder.compareTo(b.sortOrder);
+      });
     final done = live.where((i) => i.done).toList()
       ..sort(
         (a, b) => (b.doneAt ?? b.updatedAt).compareTo(a.doneAt ?? a.updatedAt),
@@ -750,10 +762,23 @@ class TaskStore extends ChangeNotifier {
     if (!changes.isEmpty) _commit(changes);
   }
 
-  void toggleSessionItem(SessionItem i) {
-    i
-      ..done = !i.done
-      ..doneAt = i.done ? now : null;
+  /// The circle, one step per click: to do → working on it → done; a done
+  /// item goes back to to do.
+  void advanceSessionItem(SessionItem i) {
+    final time = now;
+    switch (i.status) {
+      case TaskStatus.todo:
+        i.startedAt = time;
+      case TaskStatus.inProgress:
+        i
+          ..done = true
+          ..doneAt = time;
+      case TaskStatus.done:
+        i
+          ..done = false
+          ..doneAt = null
+          ..startedAt = null;
+    }
     _touchSession([i]);
   }
 

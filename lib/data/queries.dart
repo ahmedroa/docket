@@ -161,7 +161,10 @@ extension TaskQueries on TaskStore {
 
   /// A company's completed tasks, newest first. [startedOnly] keeps the ones
   /// that went through In Progress.
-  List<Task> completedForCompany(String companyId, {bool startedOnly = false}) =>
+  List<Task> completedForCompany(
+    String companyId, {
+    bool startedOnly = false,
+  }) =>
       activeTasks
           .where(
             (t) =>

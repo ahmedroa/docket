@@ -410,6 +410,24 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
         ),
         _Row(
+          label: tr('Call them'),
+          trailing: SizedBox(
+            width: 190,
+            child: Segmented<bool>(
+              options: const [false, true],
+              value: s.useProjects,
+              height: 26,
+              onChanged: context.app.setUseProjects,
+              labels: (projects, selected) => Text(
+                projects ? tr('term|Projects') : tr('term|Companies'),
+                style: Type.small.copyWith(
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                ),
+              ),
+            ),
+          ),
+        ),
+        _Row(
           label: tr('Theme'),
           trailing: SizedBox(
             width: 190,

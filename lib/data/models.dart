@@ -183,6 +183,7 @@ class SessionItem extends Record {
     required this.sortOrder,
     required this.createdAt,
     required this.updatedAt,
+    this.startedAt,
     this.doneAt,
     this.deletedAt,
   });
@@ -195,6 +196,9 @@ class SessionItem extends Record {
   DateTime createdAt;
   @override
   DateTime updatedAt;
+
+  /// Set while you are working on it (and kept once done).
+  DateTime? startedAt;
   DateTime? doneAt;
   @override
   DateTime? deletedAt;
@@ -206,6 +210,7 @@ class SessionItem extends Record {
     'sort_order': sortOrder,
     'created_at': createdAt.millisecondsSinceEpoch,
     'updated_at': updatedAt.millisecondsSinceEpoch,
+    'started_at': startedAt?.millisecondsSinceEpoch,
     'done_at': doneAt?.millisecondsSinceEpoch,
     'deleted_at': deletedAt?.millisecondsSinceEpoch,
   };
@@ -217,9 +222,16 @@ class SessionItem extends Record {
     sortOrder: (m['sort_order'] as num?)?.toDouble() ?? 0,
     createdAt: _time(m['created_at'])!,
     updatedAt: _time(m['updated_at'])!,
+    startedAt: _time(m['started_at']),
     doneAt: _time(m['done_at']),
     deletedAt: _time(m['deleted_at']),
   );
+
+  TaskStatus get status => done
+      ? TaskStatus.done
+      : startedAt != null
+      ? TaskStatus.inProgress
+      : TaskStatus.todo;
 }
 
 /// A timestamped progress note ("Sent draft to client").

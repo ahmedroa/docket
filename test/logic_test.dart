@@ -7,6 +7,7 @@ import 'package:docket/data/persistence.dart';
 import 'package:docket/data/queries.dart';
 import 'package:docket/data/settings.dart';
 import 'package:docket/data/store.dart';
+import 'package:docket/harness/demo.dart';
 import 'package:docket/l10n/l10n.dart';
 import 'package:docket/services/reminders.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -356,15 +357,27 @@ void main() {
       List<String> titles() => s.sessionItems.map((i) => i.title).toList();
       expect(titles(), ['Reply to emails', 'Fix the build', 'Call Sara']);
 
-      // Ticked items drop to the bottom, newest first; unticking returns them.
+      // One click: working on it, listed first.
+      s.advanceSessionItem(c);
+      expect(c.status, TaskStatus.inProgress);
+      expect(c.startedAt, clockNow);
+      expect(titles(), ['Call Sara', 'Reply to emails', 'Fix the build']);
+
+      // Second click: done, at the bottom, newest first.
       clockNow = clockNow.add(const Duration(minutes: 1));
-      s.toggleSessionItem(a);
+      s.advanceSessionItem(a);
+      s.advanceSessionItem(a);
       clockNow = clockNow.add(const Duration(minutes: 1));
-      s.toggleSessionItem(c);
+      s.advanceSessionItem(c);
+      expect(c.status, TaskStatus.done);
       expect(titles(), ['Fix the build', 'Call Sara', 'Reply to emails']);
-      expect(c.done && c.doneAt == clockNow, isTrue);
-      s.toggleSessionItem(c);
+      expect(c.doneAt, clockNow);
+
+      // Third click reopens it as a plain to-do.
+      s.advanceSessionItem(c);
+      expect(c.status, TaskStatus.todo);
       expect(c.doneAt, isNull);
+      expect(c.startedAt, isNull);
       expect(titles(), ['Fix the build', 'Call Sara', 'Reply to emails']);
 
       s.renameSessionItem(b, 'Fix the CI build');
@@ -392,7 +405,8 @@ void main() {
       final (s, _) = await makeStore();
       final a = s.addSessionItem('a')!;
       s.addSessionItem('b');
-      s.toggleSessionItem(a);
+      s.advanceSessionItem(a);
+      s.advanceSessionItem(a);
       final started = s.settings.sessionStartedAt;
 
       final cleared = s.clearCompletedSession();
@@ -425,6 +439,34 @@ void main() {
       expect(fresh.sessionItems.single.title, 'Keep me in the backup');
       expect(fresh.allTasks, isEmpty);
     });
+  });
+
+  test('demo data: English projects covering every state', () async {
+    final (s, _) = await makeStore();
+    seedShowcase(s);
+    expect(s.companies.map((c) => c.name), [
+      'Project One',
+      'Project Two',
+      'Project Three',
+      'Personal',
+    ]);
+    final summary = s.summary();
+    expect(summary.urgent, 3);
+    expect(summary.overdue, greaterThan(0));
+    expect(summary.inProgress, 2);
+    expect(s.todayTasks(), isNotEmpty);
+    expect(s.completedFor(ListKind.today).length, 5);
+    final arabic = RegExp(r'[\u0600-\u06FF]');
+    for (final t in s.allTasks) {
+      expect(arabic.hasMatch(t.title), isFalse, reason: t.title);
+    }
+    expect(s.sessionItems.map((i) => i.status), [
+      TaskStatus.inProgress,
+      TaskStatus.todo,
+      TaskStatus.todo,
+      TaskStatus.done,
+      TaskStatus.done,
+    ]);
   });
 
   group('backup', () {

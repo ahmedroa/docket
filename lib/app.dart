@@ -47,7 +47,7 @@ class _DocketAppState extends State<DocketApp> {
     super.dispose();
   }
 
-  AppLanguage? _builtLanguage;
+  String? _builtWording;
 
   /// Strings come from [tr], which widgets don't subscribe to, so a language
   /// switch rebuilds every element once (state and navigation are kept).
@@ -63,37 +63,43 @@ class _DocketAppState extends State<DocketApp> {
   @override
   Widget build(BuildContext context) {
     final app = widget.app;
-    final language = app.store.settings.language;
-    if (_builtLanguage != null && _builtLanguage != language) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _rebuildEverything());
-    }
-    _builtLanguage = language;
     return AppScope(
       app: app,
       child: ListenableBuilder(
         listenable: app.store,
-        builder: (context, _) => MaterialApp(
-          title: 'Docket',
-          debugShowCheckedModeBanner: false,
-          theme: buildTheme(
-            app.isCurtain ? Palette.light.glass() : Palette.light,
-          ),
-          darkTheme: buildTheme(
-            app.isCurtain ? Palette.dark.glass() : Palette.dark,
-          ),
-          themeMode: _themeMode(app.store.settings),
-          locale: app.store.settings.language.locale,
-          supportedLocales: [for (final l in AppLanguage.values) l.locale],
-          localizationsDelegates: GlobalMaterialLocalizations.delegates,
-          themeAnimationDuration: const Duration(milliseconds: 150),
-          navigatorKey: app.navigatorKey,
-          navigatorObservers: [_tracker],
-          home: const _RootPage(),
-          builder: (context, child) => RepaintBoundary(
-            key: DocketApp.captureKey,
-            child: _PanelFrame(tracker: _tracker, child: child!),
-          ),
-        ),
+        builder: (context, _) {
+          // Language or companies/projects wording changed: rebuild once.
+          final s = app.store.settings;
+          final wording = '${s.language.code}/${s.useProjects}';
+          if (_builtWording != null && _builtWording != wording) {
+            WidgetsBinding.instance.addPostFrameCallback(
+              (_) => _rebuildEverything(),
+            );
+          }
+          _builtWording = wording;
+          return MaterialApp(
+            title: 'Docket',
+            debugShowCheckedModeBanner: false,
+            theme: buildTheme(
+              app.isCurtain ? Palette.light.glass() : Palette.light,
+            ),
+            darkTheme: buildTheme(
+              app.isCurtain ? Palette.dark.glass() : Palette.dark,
+            ),
+            themeMode: _themeMode(app.store.settings),
+            locale: app.store.settings.language.locale,
+            supportedLocales: [for (final l in AppLanguage.values) l.locale],
+            localizationsDelegates: GlobalMaterialLocalizations.delegates,
+            themeAnimationDuration: const Duration(milliseconds: 150),
+            navigatorKey: app.navigatorKey,
+            navigatorObservers: [_tracker],
+            home: const _RootPage(),
+            builder: (context, child) => RepaintBoundary(
+              key: DocketApp.captureKey,
+              child: _PanelFrame(tracker: _tracker, child: child!),
+            ),
+          );
+        },
       ),
     );
   }

@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart' show SchedulerBinding;
 
@@ -18,6 +19,7 @@ import '../ui/controller.dart';
 import '../ui/pages/company_edit_page.dart';
 import '../ui/pages/search_page.dart';
 import '../ui/pages/task_editor_page.dart';
+import 'demo.dart';
 
 /// Development harness, enabled with the DOCKET_HARNESS environment variable.
 ///
@@ -38,6 +40,8 @@ Future<void> runHarness(String mode, AppController app, Directory dir) async {
         await _selfTestWrite(app, dir);
       case 'selftest2':
         await _selfTestVerify(app, dir);
+      case 'demoshots':
+        await _demoShots(app, Directory('${dir.path}/shots'));
     }
   } catch (e, st) {
     await File('${dir.path}/harness-error.txt').writeAsString('$e\n$st');
@@ -189,6 +193,36 @@ Future<void> _snapshot(AppController app, Directory out) async {
   store.updateSettings((s) => s.themeMode = ThemeMode.system);
 }
 
+/// The demo-mode data as it will be photographed: curtain and drop-down,
+/// Arabic and English interface.
+Future<void> _demoShots(AppController app, Directory out) async {
+  await out.create(recursive: true);
+  await _settle(1500);
+  final store = app.store;
+  store.localizeNames = false;
+  store.updateSettings((s) => s.welcomeDismissed = true);
+  app.setUseProjects(true);
+  seedShowcase(store);
+  app.setLanguage(AppLanguage.ar);
+  store.updateSettings((s) => s.themeMode = ThemeMode.light);
+  CurtainBackdrop.debugPaint = true;
+  app.setDisplayMode(DisplayMode.curtain);
+  await _settle(1200);
+  for (final lang in AppLanguage.values) {
+    app.setLanguage(lang);
+    app.applyDisplayMode();
+    await _settle(600);
+    app.goHome();
+    await _capture(out, '40-demo-curtain-${lang.code}');
+  }
+  CurtainBackdrop.debugPaint = false;
+  app.setLanguage(AppLanguage.ar);
+  app.setDisplayMode(DisplayMode.normal);
+  await _settle(900);
+  app.goHome();
+  await _capture(out, '41-demo-home-ar');
+}
+
 /// Realistic sample data (fictional companies, English + Arabic titles).
 Map<String, String> seedDemo(TaskStore store) {
   final now = store.now;
@@ -335,13 +369,14 @@ Map<String, String> seedDemo(TaskStore store) {
     minutes: 20 * 60,
     recurrence: Recurrence.daily,
   );
-  // A session list in progress: two left, two done.
+  // A session list under way: one being worked on, one left, two done.
   final first = store.addSessionItem('الرد على إيميلات العملاء')!;
-  store.addSessionItem('Review PR #214 before standup');
+  final working = store.addSessionItem('Review PR #214 before standup')!;
   store.addSessionItem('مراجعة عرض الربع الرابع مع الفريق');
   final last = store.addSessionItem('Book the venue for Thursday')!;
-  store.toggleSessionItem(first);
-  store.toggleSessionItem(last);
+  for (final i in [first, first, working, last, last]) {
+    store.advanceSessionItem(i);
+  }
   store.updateSettings(
     (s) => s.sessionStartedAt = now.subtract(const Duration(minutes: 50)),
   );
@@ -386,7 +421,8 @@ Map<String, Object?> _fingerprint(TaskStore store) {
         },
     ],
     'session': [
-      for (final i in store.sessionItems) '${i.title}:${i.done}:${i.sortOrder}',
+      for (final i in store.sessionItems)
+        '${i.title}:${i.status.key}:${i.sortOrder}',
     ],
     'settings': {
       'sessionStartedAt':
@@ -517,13 +553,15 @@ Future<void> _selfTestWrite(AppController app, Directory dir) async {
   final s1 = store.addSessionItem('رد على الإيميلات')!;
   store.addSessionItem('Review PR #12');
   final s3 = store.addSessionItem('Gone soon')!;
-  store.toggleSessionItem(s1);
+  store.advanceSessionItem(s1); // working on it
+  store.advanceSessionItem(s1); // done
   store.renameSessionItem(s3, 'Renamed item');
+  store.advanceSessionItem(s3); // working on it: listed first
   final s4 = store.addSessionItem('Deleted item')!;
   store.deleteSessionItem(s4);
   check(
     store.sessionItems.map((i) => i.title).join('|') ==
-            'Review PR #12|Renamed item|رد على الإيميلات' &&
+            'Renamed item|Review PR #12|رد على الإيميلات' &&
         store.allTasks.length == tasksBefore &&
         store.settings.sessionStartedAt != null,
     'session items: own list, done at the bottom, tasks untouched',

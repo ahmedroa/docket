@@ -17,7 +17,11 @@ interface and Swift/AppKit for everything that has to be native.
 | ⌘[ / esc / ⌘, | Back / Close / Settings |
 
 In any add field, `!` makes a task urgent and `#word` adds a tag.
-Ticking a task keeps it in the list: it moves to a *Completed* group at the
+The circle in front of a task moves one step per click: to do → **in
+progress** (half circle) → **done** (✓); clicking a done task reopens it.
+Hovering shows what the next click does; ⌘↵ still completes in one go.
+A task you start stays where it is (on a company's To Do tab it moves to the
+In Progress group at the top). Completing a task keeps it in the list: it moves to a *Completed* group at the
 bottom, ticked and crossed out (a company's lists keep its newest 10, the
 Today/Urgent/Overdue lists keep what was finished today). Untick to reopen.
 Settings › Menu Bar › *Keep completed tasks in lists* turns this off.
@@ -54,13 +58,22 @@ resolution changes.
 The curtain's end edge (left in Arabic) holds the **session list**: what you
 plan to do in this sitting — an hour, two, or the day. It is separate from
 company tasks: its own `session_items` table, no dates or reminders, not
-counted in the summary or the menu bar badge. Write a line and press ↵; tick
-it and it stays at the bottom, crossed out; click a line to rename it. The
+counted in the summary or the menu bar badge. Write a line and press ↵. Its
+circle works like a task's: one click marks what you're on now (listed first,
+tinted), a second marks it done (stays at the bottom, crossed out), a third
+reopens it. Click a line to rename it. The
 header shows done/total, when the session started (the first line written)
 and how long it has run. ⋯ › *New session* empties the list, *Clear
 completed* removes only the ticked lines; both can be undone. The ⚡ button
 in the top bar shows or hides the list. It needs a curtain at least 1100pt
 wide.
+
+### Companies or projects
+
+Settings › Appearance › *Call them* switches every label between
+"companies" and "projects" (both languages); `lib/l10n/projects.dart` holds the
+alternative wording and `test/l10n_test.dart` fails if a string that says
+company has no projects version.
 
 ## Languages
 
@@ -114,6 +127,21 @@ open /Applications/Docket.app
 
 The first launch of an installed build turns on *Open at login* and asks for
 notification permission. Both can be changed in Settings.
+
+## Demo for screenshots
+
+```sh
+osascript -e 'tell application id "app.docket.mac" to quit'
+open --env DOCKET_DEMO=1 /Applications/Docket.app
+```
+
+Runs the installed app on a fresh `demo/` data folder filled with English
+sample tasks — a team lead's week across Project One/Two/Three and Personal
+(PRs, TestFlight builds, sprint planning, 1:1s) — worded as *projects*, with
+your language, display mode, theme, curtain settings and shortcuts.
+`DOCKET_HARNESS=demoshots` renders the same data to PNG. Notifications, backups and the login item are
+left alone and your real tasks are never opened. Quit and open Docket
+normally to go back; anything added during the demo is discarded next time.
 
 ## Verifying changes
 
